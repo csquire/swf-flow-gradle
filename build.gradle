@@ -1,0 +1,111 @@
+/*
+ * AspectJ configuration borrowed from:
+ * http://javagalleog.blogspot.com/2016/03/gradle-and-aspectj.html
+ */
+
+apply plugin: 'java'
+apply plugin: 'idea'
+apply plugin: 'application'
+
+description = "Example project for making SWF Flow Framework work with Gradle and Intellij"
+
+mainClassName = "net.craigsquire.flow.helloworld.GreeterWorker"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+/*
+ * New configurations so the weaving can be separated cleanly
+ */
+configurations {
+    ajc
+    aspects
+    compile {
+        extendsFrom aspects
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    compile group: 'log4j', name: 'log4j', version: '1.2.17'
+    compile group: 'com.amazonaws', name: 'aws-java-sdk-swf-libraries', version: '1.11.22'
+
+    compile group: 'org.aspectj', name: 'aspectjrt', version: '1.8.9'
+    compile group: 'org.aspectj', name: 'aspectjweaver', version: '1.8.9'
+
+    /*
+     * The AspectJ tools only need to be on the ajc classpath, also specify where the aspects
+     * can be found.
+     */
+    ajc group: 'org.aspectj', name: 'aspectjtools', version: '1.8.9'
+    aspects group: 'com.amazonaws', name: 'aws-swf-build-tools', version: '1.1'
+
+}
+
+/*
+ * Create the directories where the Flow Framework will place its generated code
+ */
+task createGeneratedSrcDirs {
+    def generated = new File( 'generated' )
+    def generatedTests = new File( 'generated_tests' )
+
+    if( !generated.exists() ) {
+        generated.mkdirs()
+    }
+
+    if( !generatedTests.exists() ) {
+        generatedTests.mkdirs()
+    }
+}
+
+/*
+ * Make the idea task create the directories for the generated code
+ */
+tasks.idea {
+    dependsOn = [ createGeneratedSrcDirs ]
+}
+
+/*
+ * Add the generated code directories as src directories in the Idea project
+ */
+idea {
+    module {
+        sourceDirs += file('generated')
+        testSourceDirs += file('generated_tests')
+    }
+}
+
+/*
+ * Expose the task definitions for running ajc
+ */
+def aspectj = { destDir, aspectPath, inpath, classpath ->
+    ant.taskdef(resource: "org/aspectj/tools/ant/taskdefs/aspectjTaskdefs.properties",
+        classpath: configurations.ajc.asPath)
+
+    ant.iajc(
+        maxmem: "1024m",
+        fork: "true",
+        Xlint: "ignore",
+        destDir: destDir,
+        aspectPath: aspectPath,
+        inpath: inpath,
+        classpath: classpath,
+        source: project.sourceCompatibility,
+        target: project.targetCompatibility
+    )
+}
+
+/*
+ * Configure build to perform the AspectJ weaving *after* the java compilation is done.
+ */
+compileJava {
+    doLast {
+        aspectj project.sourceSets.main.output.classesDir.absolutePath,
+            configurations.aspects.asPath,
+            project.sourceSets.main.output.classesDir.absolutePath,
+            project.sourceSets.main.runtimeClasspath.asPath
+    }
+}

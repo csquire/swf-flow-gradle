@@ -1,0 +1,12 @@
+.idea/artifacts
+.idea/libraries
+.idea/shelf
+.idea/workspace.xml
+.idea/task.xml
+*.iml
+.gradle
+.DS_Store
+build
+out
+generated
+generated_test
